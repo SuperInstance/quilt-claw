@@ -96,3 +96,35 @@ Each cell subscribes via LINK. Each subscription is a Quilt LINK, not an HTTP ca
 ## License
 
 MIT
+
+## @quilt/evolve integration
+
+The distiller cell's prompt is mutable. `@quilt/evolve` rewrites it.
+
+```typescript
+import { DistillerCell } from './src/evolve.js';
+import { AIEngine } from '@quilt/ai';
+
+const ai = new AIEngine({ zaiKey: process.env.ZAI_TOKEN });
+const cell = new DistillerCell({
+  ai,
+  topic: 'Quilt Cell Model',
+  initialPrompt: 'The Quilt Cell Model\nThe cell is the irreducible unit of intelligence.',
+});
+
+// First tick: distill with the initial prompt
+const v1 = await cell.distill();
+
+// Run the evolve loop: it mutates cell.prompt over N iterations
+const { improved, scores } = await cell.evolve(5);
+
+// Second tick: distill with the improved prompt
+const v2 = await cell.distill();
+
+console.log('evolved:', improved, 'scores:', scores);
+console.log('v1 length:', v1.length, 'v2 length:', v2.length);
+```
+
+The 4-cell knowledge crew + a self-improving distiller is the substrate of every knowledge product. Run it overnight and the prompt gets sharper.
+
+See `src/evolve.ts` for the full integration.
