@@ -1,0 +1,33 @@
+{
+  "name": "@quilt/claw",
+  "version": "0.1.0",
+  "description": "Quilt-native knowledge crew. The agents are cells. The bus is a cell. The store is a cell.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "node test/*.test.js",
+    "lint": "tsc --noEmit"
+  },
+  "keywords": [
+    "quilt",
+    "knowledge-crew",
+    "agents",
+    "sheets",
+    "cells",
+    "subleq",
+    "evolve",
+    "rsi"
+  ],
+  "author": "SuperInstance",
+  "license": "MIT",
+  "dependencies": {
+    "@quilt/core": "workspace:*",
+    "@quilt/ai": "workspace:*",
+    "@quilt/evolve": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "@types/node": "^20.0.0"
+  }
+}
