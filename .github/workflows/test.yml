@@ -1,0 +1,92 @@
+name: test
+
+# This repo had NO .github directory at all, so nothing had ever run these tests.
+# The suite was 182 tests; `npm test` was `node test/*.test.js`, which node resolves
+# to the FIRST path and treats the other 26 as argv. It ran 4 of 182 and exited 0 —
+# a green result over a truncated suite. This workflow exists so that cannot recur.
+#
+# The load-bearing step is "assert the suite is the whole suite". Running the tests is
+# not enough: a green badge over 4 of 182 is the disease, not the cure.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # `npm install` CANNOT work here and we do not fake it: package.json declares
+      # "@quilt/{core,ai,evolve}": "workspace:*", quilt-claw is a standalone repo with
+      # no workspace root, and @quilt/core is published by no repository (404 on npm).
+      #     npm error code EUNSUPPORTEDPROTOCOL
+      #     npm error Unsupported URL Type "workspace:": workspace:*
+      # Installing the toolchain in an isolated prefix leaves those deps untouched
+      # rather than silently deleting or stubbing them. Resolving the scope is the
+      # house's decision, not this repo's.
+      - name: install build toolchain (typescript + @types/node, isolated)
+        run: bash scripts/ci-toolchain.sh
+
+      # tsc exits non-zero (8x TS2307 for @quilt/ai + @quilt/evolve, 1x known TS2741)
+      # but STILL EMITS — noEmitOnError is false. We verify the emitted path the tests
+      # actually load rather than trusting the exit code.
+      # BEFORE this PR: rootDir was "." so tsc emitted dist/src/cells-ack/ack.js while
+      # every test requires ../dist/cells-ack/ack.js. One directory too deep; nothing
+      # that requires dist/ could load.
+      - name: build (tsc emits despite known type errors)
+        run: npx tsc || true
+
+      - name: verify the emitted tree lands where the tests look
+        run: |
+          set -euo pipefail
+          echo "-- emitted modules: $(find dist -name '*.js' | wc -l)"
+          if [ ! -f dist/cells-ack/ack.js ]; then
+            echo "::error::dist/cells-ack/ack.js missing — emitted tree does not match the test requires"
+            exit 1
+          fi
+          if [ -d dist/src ]; then
+            echo "::error::dist/src/ exists — rootDir regression (emitted one level too deep)"
+            exit 1
+          fi
+          echo "✓ dist/cells-ack/ack.js present; no dist/src/ regression"
+
+      - name: typecheck classification (fails only on NEW type debt)
+        run: node scripts/typecheck-report.mjs
+
+      # Full suite. The glob is QUOTED on purpose: node expands it itself, so every
+      # test/*.test.js is discovered. Unquoted, the shell expands it and node takes
+      # the first path as the entry module and the rest as argv — the original bug.
+      - name: run the full suite
+        run: |
+          set -o pipefail
+          node --test "test/*.test.js" | tee test-output.tap
+
+      # The guard rail. Asserts the NUMBER, so a suite that runs 4 and passes is a
+      # failure here rather than a green badge.
+      - name: assert the suite is the whole suite (182 tests, 27 files)
+        run: node scripts/assert-suite.mjs test-output.tap 182
+
+      # The witness. Re-derives the fnv1a-64 chain from witness/ledger.jsonl and
+      # re-runs every witnessed file against its recorded count. Fails if any chain
+      # breaks, any test file's sha256 drifts, or any file is added/removed unnoticed.
+      # Idiom ported from SuperInstance/AI-Writings labs/situation-recorder/recorder.py;
+      # the hash algebra is byte-compatible with it (same fnv1a-64, same canonical
+      # JSON, same GENESIS) and was verified against the Python implementation.
+      - name: witness — re-derive the chain and re-run every witnessed file
+        run: node witness/ledger.js --verify
+
+      - name: upload TAP
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tap
+          path: test-output.tap
+          if-no-files-found: ignore

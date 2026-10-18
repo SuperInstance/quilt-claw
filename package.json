@@ -6,7 +6,9 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
-    "test": "node test/*.test.js",
+    "witness": "node witness/ledger.js",
+    "witness:verify": "node witness/ledger.js --verify",
+    "test": "node --test \"test/*.test.js\"",
     "lint": "tsc --noEmit"
   },
   "keywords": [
