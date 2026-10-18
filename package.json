@@ -24,9 +24,9 @@
   "author": "SuperInstance",
   "license": "MIT",
   "dependencies": {
-    "@quilt/core": "workspace:*",
-    "@quilt/ai": "workspace:*",
-    "@quilt/evolve": "workspace:*"
+    "@quilt/core": "file:../quilt/packages/core",
+    "@quilt/ai": "file:../quilt-ai",
+    "@quilt/evolve": "file:../quilt-evolve"
   },
   "devDependencies": {
     "typescript": "^5.0.0",
