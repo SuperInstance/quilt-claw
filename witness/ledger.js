@@ -16,10 +16,27 @@
  *
  * The point of the house rule "if it wasn't witnessed, it didn't happen": a repo
  * whose CI badge says green over 4 of 182 tests LOOKS healthy and IS NOT. This
- * ledger makes the count itself a tamper-evident receipt. Edit a test file, add or
+ * ledger makes the count itself an ATTESTABLE receipt. Edit a test file, add or
  * delete a test, or quietly shrink the glob, and `witness/ledger.js --verify`
  * breaks the chain. A green badge over a truncated suite is the disease this exists
  * to make impossible to ship silently.
+ *
+ * WHAT THAT IS AND IS NOT -- read before claiming this log is tamper-evident.
+ *
+ *   linkage class ............ chain (v0: dense seq, order-implied linkage)
+ *   leg 1  chain re-derives . YES. Replay reproduces every linkage, so an edit is
+ *                               expensive and a naive edit is named.
+ *   leg 2  head signed ....... NO. Nothing here is signed.
+ *   leg 3  head published
+ *          out of band ....... NO. No published head exists.
+ *
+ * So: ATTESTABLE, not tamper-evident. A writer who re-chains their edit
+ * produces a ledger that verifies perfectly, and a TAIL-TRUNCATED ledger is
+ * a SHORTER VALID CHAIN -- delete the OUTCOME row and everything that
+ * remains still replays clean. Neither is visible to --verify. The word
+ * "tamper-evident" requires all three legs; this ledger has one.
+ *
+ * See SuperInstance/witness-spec SPEC.md for the normative definitions.
  *
  * ZERO dependencies — node stdlib only, like the house's.
  *
@@ -198,8 +215,14 @@ function load(p) {
 }
 
 /**
- * Replay the chain. Catches reorder, edit, and drop — the same tamper-evidence
- * recorder.py gives a transcript. Ported rule-for-rule.
+ * Replay the chain. Catches reorder, edit, and mid-chain drop — the same
+ * RE-DERIVATION recorder.py gives a transcript. Ported rule-for-rule.
+ *
+ * It does NOT catch a re-chained rewrite, and it does NOT catch a
+ * tail-truncation (a shorter chain is still a valid chain). Those need an
+ * external anchor: a head signed by a key this writer does not hold and
+ * published where this repo's workflow cannot push. There is none yet, so
+ * this is a re-derivation check, not a tamper check.
  */
 function verifyChain(records) {
   let prev = GENESIS;
@@ -219,7 +242,11 @@ function verifyChain(records) {
     seen.add(rec.hash);
     prev = rec.hash;
   }
-  return { ok: true, msg: `ok: ${records.length} records, chain intact` };
+  // "chain-intact" is precise: THE CHAIN VERIFIED. It is not a claim about
+  // tampering — this same function returns ok for a tail-truncated chain,
+  // because a prefix of a valid chain is a valid chain. See the module
+  // docstring for which of the three anchor legs actually hold.
+  return { ok: true, msg: `ok: ${records.length} records, chain-intact (leg 1 only: re-derived, not anchored)` };
 }
 
 // --- witness the suite --------------------------------------------------------
@@ -331,7 +358,9 @@ function cmdBuild() {
   console.log(v.ok ? `VERIFY OK   — ${v.msg}` : `VERIFY FAIL — ${v.msg}`);
   if (!v.ok) return 1;
 
-  // tamper-evidence: editing one field must break the chain.
+  // re-derivation: editing one field must break the chain. Note this is a
+  // NAIVE edit. An attacker who recomputes the chain over their own edit
+  // passes this check — which is the limit, demonstrated not asserted.
   const bad = load(LEDGER_PATH);
   const victim = bad.find((r) => r.rel === 'MARK');
   if (victim) victim.body.tests = victim.body.tests + 1;
@@ -340,7 +369,9 @@ function cmdBuild() {
     console.error('tamper went undetected — the chain is not doing its job');
     return 1;
   }
-  console.log('tamper-evidence: editing one record breaks verification ✓');
+  console.log('re-derivation: editing one record breaks verification ✓');
+  console.log('  (a re-chained rewrite would NOT -- no anchor yet, so this log');
+  console.log('   is ATTESTABLE, not tamper-evident. See the module docstring.)');
 
   console.log('');
   console.log(`files      ${files.length}`);

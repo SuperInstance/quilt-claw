@@ -1,5 +1,10 @@
 # witness/ — if it wasn't witnessed, it didn't happen
 
+> **This ledger is ATTESTABLE, not tamper-evident.** It has one of the three
+> legs an anchor needs. The chain re-derives; the head is not signed; no head is
+> published out of band. See *What this ledger does not prove* below — and note
+> that deleting the final `OUTCOME` row still makes `--verify` exit 0.
+
 `ledger.jsonl` is an append-only, hash-chained receipt ledger of this repo's test
 suite: one record per test file (path, source sha256, tests run), chained, plus one
 `OUTCOME` recording the aggregate.
@@ -42,6 +47,38 @@ All four of these were fault-injected and confirmed to fail:
 | delete a test file | missing witness record | 1 |
 | add an unwitnessed test file | file count mismatch | 1 |
 | hand-edit `ledger.jsonl` | hash mismatch at `seq` | 1 |
+
+These are all **re-derivation** checks. That is a real property and it is
+worth having — but it is not the same thing as tamper-evidence, because all
+four assume the tamperer does *not* recompute the chain.
+
+## What this ledger does not prove
+
+A log earns the word **tamper-evident** only when all three legs hold:
+
+| # | leg | here? |
+|---|---|---|
+| 1 | **chain re-derives** — replay reproduces every linkage | **yes** |
+| 2 | **head signed** by a key we trust | no — nothing is signed |
+| 3 | **head published out of band** — where the writer does not control it | no — no published head exists |
+
+This ledger has **leg 1 only**. Two attacks are therefore invisible to it:
+
+- **The re-chained rewrite.** Recompute the chain over your own edit and every
+  id agrees, because you recomputed it. The four faults in the table above are
+  all *naive* tampers.
+- **The tail truncation.** *A truncated chain is a shorter valid chain.*
+  Measured here: delete the final `OUTCOME` row — the aggregate verdict for the
+  whole run — and `node witness/ledger.js --verify` still prints `CHAIN OK` and
+  **exits 0**. Nothing in the file records that the `OUTCOME` ever existed.
+
+So the verdict string says **`chain-intact`**, which means precisely *the chain
+verified* — not *nothing was tampered with*. Closing this gap is one build:
+sign the head (Ed25519, with a verifier that refuses rather than degrades when
+the backend is absent) and commit that signed head somewhere this repo's own
+workflow cannot push to.
+
+Normative definitions: [`SuperInstance/witness-spec`](https://github.com/SuperInstance/witness-spec) `SPEC.md`.
 
 ## Why this exists
 
